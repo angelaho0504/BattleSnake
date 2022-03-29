@@ -143,9 +143,9 @@ def choose_move(data: dict) -> str:
     my_head = data["you"]["head"]
     
     # Uncomment the lines below to see what this data looks like in your output!
-    print(f"~~~ Turn: {data['turn']}  Game Mode: {data['game']['ruleset']['name']} ~~~")
+    #print(f"~~~ Turn: {data['turn']}  Game Mode: {data['game']['ruleset']['name']} ~~~")
     #print(f"All board data this turn: {data}")
-    print(f"My Battlesnakes head this turn is: {my_head}")
+    #print(f"My Battlesnakes head this turn is: {my_head}")
 
     grid = np.zeros((board['width'], board['height']))
     
@@ -154,7 +154,7 @@ def choose_move(data: dict) -> str:
     for s in board['snakes']:
         s_body = s['body']
                 
-        bodyLoc = len(s_body) + 1
+        bodyLoc = len(s_body)
 
         s_head = s_body[0]
         if s_head != my_head and s['length'] >= data['you']['length']:
@@ -172,9 +172,9 @@ def choose_move(data: dict) -> str:
         
     #print(grid)
     path = findFood(grid, my_head, data['you']['body'][-1])
-    print(path)
+    #print(path)
     firstNode = path[1]
-    print(firstNode)
+    #print(firstNode)
 
     if firstNode[0] < my_head["x"]:
         move = "left"
@@ -187,6 +187,6 @@ def choose_move(data: dict) -> str:
     else:
         move = None
     
-    print(f"{data['game']['id']} MOVE {data['turn']}: {move} picked")
+    print(f"MOVE {data['turn']}: {move} picked")
 
     return move
