@@ -6,7 +6,14 @@ This file can be a nice home for your Battlesnake's logic and helper functions.
 We have started this for you, and included some logic to remove your Battlesnake's 'neck'
 from the list of possible moves!
 """
-    
+
+""" TODO
+Prioritize center of enemy snake
+Learn to cut off enemy snakes
+Fix fill to account for enemy snake cutting off
+Change food value when enemy snake is closer than us (to target reachable food)
+"""
+
 def get_info() -> dict:
     """
     This controls your Battlesnake appearance and author permissions.
@@ -16,155 +23,156 @@ def get_info() -> dict:
     """
     return {
         "apiversion": "1",
-        "author": "aclalick2",
+        "author": "aclalick3",
         "color": "#CCCCFF",
         "head": "earmuffs",
         "tail": "ice-skate",
     }
 
-def _score_center(board, health, scores):
-    grid = np.zeros((board['width'], board['height']))
-    center = ((board['width'] - 1) / 2.0, (board['height'] - 1) / 2.0)
-    for x in range(board['width']):
-        for y in range(board['height']):
-            grid[x][y] = (abs(x - center[0]) / board['width'] + abs(y - center[1]) / board['height'])
-    
-    healthLevel = (health / 100)
-    grid *= healthLevel / 4
-    #print("Center")
-    #print(grid)
-    scores['center'] = grid
-
-def _score_food(board, health, my_len, scores):
-    grid = np.ones((board['width'], board['height'])) * (board['width'] + board['height'])
-    
-    for x in range(board['width']):
-        for y in range(board['height']):
-            for f in board['food']:
-                dist = abs(x - f['x']) + abs(y - f['y'])
-                grid[x][y] = min(grid[x][y], dist)
-
-    # focus eating when hungry
-    hunger = (1 / health)
-    # focus eating when smaller than other snakes
-    longest = 0
-    for s in board['snakes'][1:]:
-        longest = max(longest, s['length'])
-    if my_len <= longest:
-        hunger *= 3 + (1 * (longest - my_len))
-    grid *= hunger
-    #print("Food")
-    #print(grid)
-    scores['food'] = grid
-
 #[(0,-1,1), (0,1,1), (-1,0,1), (1,0,1), (1,1,2), (1,-1,2), (-1,1,2), (-1,-1,2),
 #(0,-2,2), (0,2,2), (-2,0,2), (2,0,2), (2,2,4), (2,-2,4), (-2,2,4), (-2,-2,4),
 #(1,-2,3), (1,2,3), (-1,-2,3), (-1,2,3), (-2,1,3), (2,1,3), (-2,-1,3), (2,-1,3)]
-def _score_snakes(board, my_head, my_len, scores):
+
+def _score_snakes2(board, my_snake):
     grid = np.zeros((board['width'], board['height']))
 
+    my_head = my_snake['head']
+    center = ((board['width'] - 1) / 2.0, (board['height'] - 1) / 2.0)
     for s in board['snakes']:
-        s_body = s['body']
+        #s_body = s['body']
+        s_head = s['head']
 
-        s_head = s_body[0]
         if s_head != my_head:
-            if s['length'] >= my_len: # Avoid head to head with larger snakes
-                for new_position in [(0,-1,1/1), (0,1,1/1), (-1,0,1/1), (1,0,1/1), (1,1,1/2), (1,-1,1/2), (-1,1,1/2), (-1,-1,1/2),(0,-2,1/2), (0,2,1/2), 
-                                     (-2,0,1/2), (2,0,1/2), (2,2,1/4), (2,-2,1/4), (-2,2,1/4), (-2,-2,1/4),(1,-2,1/3), (1,2,1/3), (-1,-2,1/3), (-1,2,1/3), 
-                                     (-2,1,1/3), (2,1,1/3), (-2,-1,1/3), (2,-1,1/3)]: # Adjacent squares
-                    node_position = (s_head["x"] + new_position[0], s_head["y"] + new_position[1])
-                    if node_position[0] > (board['width'] - 1) or node_position[0] < 0 or node_position[1] > (board['height'] - 1) or node_position[1] < 0:
-                        continue
-                    grid[node_position[0]][node_position[1]] += new_position[2]
-            else: # Kill smaller snakes with head to head
-                for x in range(board['width'] - 1):
-                    for y in range(board['height'] - 1):
-                        if x > (board['width'] - 1) or y < 0 or x > (board['height'] - 1) or y < 0:
-                            continue
-                        dist = abs(x - s_head['x']) + abs(y - s_head['y'])
-                        grid[x][y] -= 1 / dist
-        
-        for b in s_body:
-            grid[b['x']][b['y']] = 10
-
-        # set tail value, 1 if not next to food otherwise 2
-        tailVal = 1
-        for new_position in [(0,-1), (0,1), (-1,0), (1,0)]: # Adjacent squares
-            node_position = (s_head["x"] + new_position[0], s_head["y"] + new_position[1])
-            for f in board['food']:
-                if f['x'] == node_position[0] and f['y'] == node_position[1]:
-                    tailVal = 2
-        s_tail = s_body[-1]
-        grid[s_tail['x']][s_tail['y']] = tailVal
-
-    #print("Snakes", my_head)
-    #print(grid)
-    scores['snakes'] = grid
+            # Avoid head to head with larger snakes, Kill smaller snakes with head to head
+            lengthDiff = s['length'] - my_snake['length']
+            for new_position in [(0, -1), (0, 1), (-1, 0), (1, 0)]: # Adjacent squares
+                # Get node position
+                pos = (my_head['x'] + new_position[0], my_head['y'] + new_position[1])
+                if pos[0] > (len(grid) - 1) or pos[0] < 0 or pos[1] > (len(grid[0]) - 1) or pos[1] < 0:
+                    break
+                dist = abs(pos[0] - s_head['x']) + abs(pos[1] - s_head['y'])
+                grid[pos[0]][pos[1]] += (lengthDiff / dist) * 20
+                
+                # Prefer a central position over snakes
+                myDistToCenter = abs(pos[0] - center[0]) / board['width'] + abs(pos[1] - center[1]) / board['height']
+                sDistToCenter = abs(s_head['x'] - center[0]) / board['width'] + abs(s_head['y'] - center[1]) / board['height']
+                if myDistToCenter > sDistToCenter:
+                    grid[pos[0]][pos[1]] += lengthDiff / myDistToCenter
+                else:
+                    grid[pos[0]][pos[1]] -= lengthDiff * myDistToCenter
+                
+    #print("Snakes")
+    #print(np.array(grid)[my_snake['head']['x']-1:my_snake['head']['x']+1+1, my_snake['head']['y']-1:my_snake['head']['y']+1+1])
+    return grid
 
 # https://python.plainenglish.io/a-python-example-of-the-flood-fill-algorithm-bced7f96f569
-def _flood_fill(grid, x, y, start_pos):
+def _flood_fill2(grid, curPos, prevPos, dist, my_body, maxDist):
     # firstly, make sure the x and y are inbounds
-    if x > (len(grid) - 1) or x < 0 or y > (len(grid[0]) - 1) or y < 0:
+    if curPos[0] > (len(grid) - 1) or curPos[0] < 0 or curPos[1] > (len(grid[0]) - 1) or curPos[1] < 0:
         return 0
 
-    # check if already visited
-    if grid[x][y] == -1:
-        return 0
-
+    dist += 1
     # check if open when snake gets to it
-    if grid[x][y] - (abs(x - start_pos[0]) + abs(y - start_pos[1])) > 0:
+    occupation = grid[curPos[0]][curPos[1]] - dist
+    if occupation > 0:
         return 0
+        
+    # check if max length
+    if dist >= maxDist:
+        return -maxDist
 
-    grid[x][y] = -1
+    # append curPos and update obstacles
+    if grid[curPos[0]][curPos[1]] == -1:
+        for v in my_body:
+            grid[v[0]][v[1]] += 1
+    my_body.append(curPos)
+    grid[curPos[0]][curPos[1]] = grid[prevPos[0]][prevPos[1]] + 1
+
     # attempt to fill the neighboring positions
-    count = 1
-    count += _flood_fill(grid, x+1, y, start_pos)
-    count += _flood_fill(grid, x-1, y, start_pos)
-    count += _flood_fill(grid, x, y+1, start_pos)
-    count += _flood_fill(grid, x, y-1, start_pos)
-    return count
+    for new_position in [(0, -1), (0, 1), (-1, 0), (1, 0)]: # Adjacent squares
+        # Get node position
+        pos = (curPos[0] + new_position[0], curPos[1] + new_position[1])
+        childSpace = _flood_fill2(grid.copy(), pos, curPos, dist, my_body.copy(), maxDist)
+        dist = max(dist, childSpace)
+        if childSpace == -maxDist:
+            return -maxDist
+    #if occupation > 0:
+    #    return dist / 2
+    return dist
 
-def _score_dir_room(board, my_head, scores):
-    grid = np.zeros((board['width'], board['height']))
+def longestRoom(board, my_snake):
+    my_head = my_snake['head']
     obstacles = np.zeros((board['width'], board['height']))
     for s in board['snakes']:
         s_body = s['body']
-        bodyLoc = len(s_body)        
+        bodyLoc = s['length']
+        if s['head'] != my_snake['head']:
+            for f in board['food']:
+                if abs(f['x'] - s['head']['x']) + abs(f['y'] - s['head']['y']) == 1:
+                    bodyLoc += 1
+                    continue
         for b in s_body:
-            obstacles[b['x']][b['y']] = bodyLoc
+            obstacles[b['x']][b['y']] += bodyLoc
             bodyLoc -= 1
+            
+    for f in board['food']:
+        obstacles[f['x']][f['y']] = -1
+
+    bodPos = []
+    for bp in my_snake['body']:
+        bodPos.append((bp['x'], bp['y']))
     
-    for new_position in [(0, -1), (0, 1), (-1, 0), (1, 0)]: # Adjacent squares
+    grid = np.zeros((board['width'], board['height']))
+    maxDist = 20
+    for new_position in [(0, -1, "down"), (0, 1, "up"), (-1, 0, "left"), (1, 0, "right")]: # Adjacent squares
         # Get node position
         pos = (my_head["x"] + new_position[0], my_head["y"] + new_position[1])
         if pos[0] > (board['width'] - 1) or pos[0] < 0 or pos[1] > (board['height'] - 1) or pos[1] < 0:
             continue
-        space = _flood_fill(obstacles.copy(), pos[0], pos[1], pos)
-        #print(space)
-        grid[pos[0]][pos[1]] = 10 / (space + 1)
-    #print("Room", my_head)
-    #print(grid)
-    scores['room'] = grid
+        space = _flood_fill2(obstacles.copy(), pos, (my_head['x'], my_head['y']), 0, bodPos.copy(), maxDist)
+        print(new_position[2], "space:", space)
+        grid[pos[0]][pos[1]] = 5*maxDist / (space + .01)
+    #print("Room")
+    #print(np.array(grid)[my_snake['head']['x']-1:my_snake['head']['x']+1+1, my_snake['head']['y']-1:my_snake['head']['y']+1+1])
+    return grid
 
 def setupGrid(data: dict):
     board = data['board']
     my_snake = data['you']
-    scores = {}
-    threds = []
-    threds.append(threading.Thread(target=_score_center, args=(board, my_snake['health'], scores)))
-    threds.append(threading.Thread(target=_score_food, args=(board, my_snake['health'], my_snake['length'], scores)))
-    threds.append(threading.Thread(target=_score_snakes, args=(board, my_snake["head"], my_snake['length'], scores)))
-    threds.append(threading.Thread(target=_score_dir_room, args=(board, my_snake["head"], scores)))
-    for t in threds:
-        t.start()
+    my_tail = my_snake['body'][-1]
+    maxDist = board['width'] + board['height'] + 1
+    
+    # focus eating when hungry
+    hunger = 50 / my_snake['health']
+    # focus eating when smaller than other snakes
+    longest = 0
+    for s in board['snakes'][1:]:
+        longest = max(longest, s['length'])
+    if my_snake['length'] <= longest + 2:
+        hunger *= 3 + (1 * (longest - my_snake['length']))
+    
+    grid = np.zeros((board['width'], board['height']))
+    for new_position in [(0, -1), (0, 1), (-1, 0), (1, 0)]: # Adjacent squares
+        # Get node position
+        x = my_snake['head']["x"] + new_position[0]
+        y = my_snake['head']["y"] + new_position[1]
+        if x > (board['width'] - 1) or x < 0 or y > (board['height'] - 1) or y < 0:
+            continue
+        # Chase tail is safe when dont need food
+        #grid[x][y] += (abs(x - my_tail['x']) + abs(y - my_tail['y'])) / hunger
+        # Prefer going straight
+        #grid[x][y] += 10 / (abs(x - my_snake['body'][1]['x']) + abs(y - my_snake['body'][1]['y']) + .001) / hunger
 
-    for t in threds:
-        t.join()
-
-    #print(scores)
-    grid = sum(scores.values())
-    #print("Grid", my_snake['head'])
-    #print(grid)
+        # Go Towards Food
+        closestFoodDist = maxDist
+        for f in board['food']:
+            dist = abs(x - f['x']) + abs(y - f['y'])
+            if dist < closestFoodDist:
+                closestFoodDist = dist
+        grid[x][y] += closestFoodDist * hunger
+    grid += _score_snakes2(board, my_snake)
+    grid += longestRoom(board, my_snake)    
+    print(np.array(grid)[my_snake['head']['x']-1:my_snake['head']['x']+1+1, my_snake['head']['y']-1:my_snake['head']['y']+1+1])
     return grid
     
 def choose_move(data: dict) -> str:
@@ -185,7 +193,7 @@ def choose_move(data: dict) -> str:
     #print(f"All board data this turn: {data}")
     my_head = data["you"]["head"]
     board = data['board']
-    print(f"My Battlesnakes head this turn is: {my_head}")
+    print(f"My Battlesnakes head this turn: {data['turn']} is: {my_head}")
     
     grid = setupGrid(data)
 
