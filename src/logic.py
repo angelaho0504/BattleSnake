@@ -37,7 +37,7 @@ LENGTH_DIFF = 2 # how much larger snake wants to be than other snakes to attack
 HUNGER_COST_LENGTH_DIFF = HUNGER_COST_SMALLER / LENGTH_DIFF # cost of each segment larger, calculated to never give negative
 SEARCH_DIST = 20 # how far to search when calculating available movement room
 
-def _score_snakes2(board, my_snake):
+def _score_snakes2(board, my_snake, scores):
     gridHead = np.zeros((board['width'], board['height']))
     gridCenter = np.zeros((board['width'], board['height']))
 
@@ -59,14 +59,18 @@ def _score_snakes2(board, my_snake):
                 gridHead[pos[0]][pos[1]] += lengthDiff / dist # Run from bigger, go towards smaller
                 
                 # Prefer a central position over snakes
-                myDistToCenter = abs(pos[0] - center[0]) / board['width'] + abs(pos[1] - center[1]) / board['height']
-                sDistToCenter = abs(s_head['x'] - center[0]) / board['width'] + abs(s_head['y'] - center[1]) / board['height']
-                if myDistToCenter >= sDistToCenter and lengthDiff < 0:
-                    gridCenter[pos[0]][pos[1]] += lengthDiff / myDistToCenter
-                else:
-                    gridCenter[pos[0]][pos[1]] += lengthDiff * myDistToCenter
-                
-    return gridHead, gridCenter
+                # Center only matters when in same area as other snakes
+                horizontalArea = (my_head['x'] < center[0] and s_head['x'] < center[0]) or (my_head['x'] > center[0] and s_head['x'] > center[0])
+                verticalArea = (my_head['y'] < center[1] and s_head['y'] < center[1]) or (my_head['y'] > center[1] and s_head['y'] > center[1])
+                if (horizontalArea and new_position[0] != 0) or (verticalArea and new_position[1] != 0):
+                    myDistToCenter = abs(pos[0] - center[0]) / board['width'] + abs(pos[1] - center[1]) / board['height']
+                    sDistToCenter = abs(s_head['x'] - center[0]) / board['width'] + abs(s_head['y'] - center[1]) / board['height']
+                    if myDistToCenter >= sDistToCenter and lengthDiff < 0:
+                        gridCenter[pos[0]][pos[1]] += lengthDiff / myDistToCenter
+                    else:
+                        gridCenter[pos[0]][pos[1]] += lengthDiff * myDistToCenter
+    scores['snakes_head_grid'] = gridHead
+    scores['snakes_center_grid'] = gridCenter
 
 # https://python.plainenglish.io/a-python-example-of-the-flood-fill-algorithm-bced7f96f569
 def _flood_fill2(grid, curPos, prevPos, dist, my_body):
@@ -103,7 +107,7 @@ def _flood_fill2(grid, curPos, prevPos, dist, my_body):
     #    return dist / 2
     return dist
 
-def longestRoom(board, my_snake):
+def longestRoom(board, my_snake, scores):
     my_head = my_snake['head']
     obstacles = np.zeros((board['width'], board['height']))
     for s in board['snakes']:
@@ -134,9 +138,9 @@ def longestRoom(board, my_snake):
         space = _flood_fill2(obstacles.copy(), pos, (my_head['x'], my_head['y']), 0, bodPos.copy())
         print(new_position[2], "space:", space)
         grid[pos[0]][pos[1]] = SEARCH_DIST / (space + .01)
-    return grid
+    scores['longestRoom_grid'] = grid
 
-def towards_food(board, my_snake):
+def towards_food(board, my_snake, scores):
     grid = np.zeros((board['width'], board['height']))
     for new_position in [(0, -1), (0, 1), (-1, 0), (1, 0)]: # Adjacent squares
         # Get node position
@@ -152,7 +156,7 @@ def towards_food(board, my_snake):
             if dist < closestFoodDist:
                 closestFoodDist = dist
         grid[x][y] += closestFoodDist
-    return grid
+    scores['towards_food_grid'] = grid
 
 def get_hunger(board, my_snake):
     # focus eating when hungry
@@ -179,28 +183,30 @@ def setupGrid(data: dict):
     board = data['board']
     my_snake = data['you']
 
-    towards_food_grid = towards_food(board, my_snake)
-    longestRoom_grid = longestRoom(board, my_snake)
-    snakes_head_grid, snakes_center_grid = _score_snakes2(board, my_snake)
+    scores = {}
+    towards_food(board, my_snake, scores)
+    longestRoom(board, my_snake, scores)
+    _score_snakes2(board, my_snake, scores)
 
     weights = {"towards_food_grid": get_hunger(board, my_snake),
-              "longestRoom_grid": 10,
-              "snakes_head_grid": 20,
-              "snakes_center_grid": 10,}
+              "longestRoom_grid": 1,
+              "snakes_head_grid": 10,
+              "snakes_center_grid": 20,}
+    
     print("towards_food_grid:")
-    print_near_snake(weights['towards_food_grid'] * towards_food_grid, my_snake['head'])
+    print_near_snake(weights['towards_food_grid'] * scores['towards_food_grid'], my_snake['head'])
     print("longestRoom_grid:")
-    print_near_snake(weights['longestRoom_grid'] * longestRoom_grid, my_snake['head'])
+    print_near_snake(weights['longestRoom_grid'] * scores['longestRoom_grid'], my_snake['head'])
     print("snakes_head_grid:")
-    print_near_snake(weights['snakes_head_grid'] * snakes_head_grid, my_snake['head'])
+    print_near_snake(weights['snakes_head_grid'] * scores['snakes_head_grid'], my_snake['head'])
     print("snakes_center_grid:")
-    print_near_snake(weights['snakes_center_grid'] * snakes_center_grid, my_snake['head'])
+    print_near_snake(weights['snakes_center_grid'] * scores['snakes_center_grid'], my_snake['head'])
     
     grid = np.zeros((board['width'], board['height']))
-    grid += weights['towards_food_grid'] * towards_food_grid
-    grid += weights['longestRoom_grid'] * longestRoom_grid
-    grid += weights['snakes_head_grid'] * snakes_head_grid
-    grid += weights['snakes_center_grid'] * snakes_center_grid
+    grid += weights['towards_food_grid'] * scores['towards_food_grid']
+    grid += weights['longestRoom_grid'] * scores['longestRoom_grid']
+    grid += weights['snakes_head_grid'] * scores['snakes_head_grid']
+    grid += weights['snakes_center_grid'] * scores['snakes_center_grid']
     print("Final Grid:")
     print_near_snake(grid, my_snake['head'])
     #print(np.array(grid)[my_snake['head']['x']-1:my_snake['head']['x']+1+1, my_snake['head']['y']-1:my_snake['head']['y']+1+1])
