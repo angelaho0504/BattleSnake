@@ -190,8 +190,8 @@ def setupGrid(data: dict):
 
     weights = {"towards_food_grid": get_hunger(board, my_snake),
               "longestRoom_grid": 1,
-              "snakes_head_grid": 10,
-              "snakes_center_grid": 20,}
+              "snakes_head_grid": 7.5,
+              "snakes_center_grid": 10,}
     
     print("towards_food_grid:")
     print_near_snake(weights['towards_food_grid'] * scores['towards_food_grid'], my_snake['head'])
