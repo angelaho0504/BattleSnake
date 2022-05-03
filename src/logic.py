@@ -161,7 +161,6 @@ def choose_move(data: dict) -> str:
 
     possible_final_moves = get_direction(data, possible_final_moves)
 
-    # Choose a random direction from the remaining possible_moves to move in, and then return that move
     move = ""
     if possible_final_moves:
       move = possible_final_moves[0]
